@@ -1,0 +1,6 @@
+data/*
+!data/unet_missing_neurons.json
+results/
+__pycache__/
+.venv/
+*.part

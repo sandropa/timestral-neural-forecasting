@@ -1,0 +1,14 @@
+[project]
+name = "timestral-neural-forecasting"
+version = "0.1.0"
+description = "Zero-shot forecasting of zebrafish whole-brain activity (ZAPBench) with Timestral and PCA brain context"
+requires-python = ">=3.12"
+dependencies = [
+    "numpy>=2.5",
+    "requests>=2.34",
+    "timestral",
+    "zarr>=3.4",
+]
+
+[tool.uv.sources]
+timestral = { git = "https://github.com/mistralai/timestral.git" }
