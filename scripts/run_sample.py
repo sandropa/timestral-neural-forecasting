@@ -65,7 +65,7 @@ for cond in CONDS:
         med[w] = m
         for k, v in QS.items():
             Q[k][w] = q[v]
-        if (w + 1) % 4 == 0 or w + 1 == len(st):                           # save progress inside a condition
+        if True:                                                           # save progress after every window (safe to interrupt)
             np.savez(part, med=med, done=w + 1, **Q)
             log(f"{cond:9s} window {w + 1:3d}/{len(st)} ({(time.time() - t) / (w + 1 - done):.0f} s per window)")
     np.savez(path, window_index=widx, starts=st, neurons=neurons, truth=Y, linear=lin, med=med, **Q)
