@@ -47,7 +47,8 @@ def val_starts(n):
 
 def prompt_frames(n, end=None):
     """The training prompt: the last <= 768 training frames of condition n, ending at `end` (default: train end).
-    Taxis has no training data, so it gets no prompt."""
+    Taxis has no training data, so it gets no prompt (run_sample.py instead uses the condition recognised by
+    ConditionMatcher, which is never taxis)."""
     if n == HOLDOUT:
         return np.array([], int)
     end = split(n)[0] if end is None else end
@@ -64,6 +65,31 @@ def pca_scores(X, K):
     """Scores of the top-K principal components (fit on training frames, see fit_pca.py) for every frame."""
     p = np.load(RESULTS / "pca.npz")
     return ((X - p["mu"].astype(np.float32)) @ p["V"][:, :K].astype(np.float32)).astype(np.float32)
+
+
+class ConditionMatcher:
+    """Recognise the stimulus condition of a window from brain activity alone (no labels, no stimulus).
+
+    The window's 256 frames of the top-48 PCA scores, standardised with training statistics, are compared with each
+    training condition's training frames: score = mean over the window's frames of the distance to the nearest training
+    frame of that condition. The condition with the lowest score is chosen; its training data becomes the prompt. On
+    ZAPBench this picks the true condition for every validation and test window of the 8 training conditions; windows
+    of the held-out taxis condition are matched to their most similar known condition (flash).
+    """
+
+    def __init__(self, X, K=48):
+        Z = pca_scores(X, K)
+        self.frames = {n: np.arange(bounds(n)[0], split(n)[0]) for n in TRAIN_CONDS}
+        allt = np.concatenate(list(self.frames.values()))
+        self.Zs = ((Z - Z[allt].mean(0)) / Z[allt].std(0)).astype(np.float32)
+        self.banks = {n: self.Zs[f] for n, f in self.frames.items()}
+        self.sq = {n: (b ** 2).sum(1) for n, b in self.banks.items()}
+
+    def __call__(self, s):
+        """The training condition whose training activity best matches frames [s-256, s)."""
+        w = self.Zs[s - C:s]; w2 = (w ** 2).sum(1)[:, None]
+        score = {n: np.sqrt(np.maximum(w2 + self.sq[n][None] - 2 * w @ b.T, 0)).min(1).mean() for n, b in self.banks.items()}
+        return min(score, key=score.get)
 
 
 def sample_neurons(n, seed, exclude=()):

@@ -15,10 +15,12 @@ For every neuron and test window, Timestral forecasts a small multivariate serie
   a denoised summary of the brain-wide state.
 
 Only the neuron's forecast is kept. In front of the official 256-frame context we place a fixed **training prompt**:
-the last ≤ 768 frames of the same condition's training split, then 32 missing (NaN) frames. This shows the model
+the last ≤ 768 frames of a condition's training split, then 32 missing (NaN) frames. The condition is recognised
+from the window's own brain activity (nearest training condition in PCA space), so no condition labels and no
+stimulus are used; this picks the true condition for every test window of the 8 training conditions. This shows the model
 what the condition looks like, the zero-shot counterpart of a model trained on those frames. The per-window input is
-still exactly the official 256 frames; the prompt never contains validation or test frames. Taxis, the held-out
-condition, has no training data and gets no prompt. Timestral returns quantiles, so every forecast comes with
+still exactly the official 256 frames; the prompt never contains validation or test frames. Windows of taxis, the
+held-out condition, are matched to their most similar known condition (flash). Timestral returns quantiles, so every forecast comes with
 prediction intervals.
 
 ## Results so far

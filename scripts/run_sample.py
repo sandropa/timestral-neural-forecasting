@@ -7,15 +7,16 @@
              --conditions flash  only these conditions; --max-windows 2: only the first windows (quick checks)
 
 Method (per neuron, per window): Timestral-209M forecasts the neuron jointly with the top-K PCA scores of the whole
-brain. The input is the condition's training prompt (last <= 768 training frames), 32 NaN frames, then the official
-256-frame context; taxis (held out, no training data) gets the 256 frames only. No training of any kind.
+brain. The input is a training prompt (last <= 768 training frames), 32 NaN frames, then the official 256-frame
+context. The prompt's condition is recognised from the window's own brain activity (common.ConditionMatcher): no
+condition labels and no stimulus are used. No training of any kind.
 Neurons without a released UNet forecast (data/unet_missing_neurons.json, 27 neurons) are never sampled.
 
 Saves results/<run>/<condition>.npz (truth, linear baseline, median, quantiles 5/10/25/75/90/95%); resumable.
 """
 import json, os, sys, time
 import numpy as np
-from common import DATA, RESULTS, NAMES, H, C, test_starts, prompt_frames, load_traces, pca_scores, sample_neurons, forecast
+from common import DATA, RESULTS, NAMES, H, C, test_starts, prompt_frames, load_traces, pca_scores, sample_neurons, forecast, ConditionMatcher
 
 arg = lambda k, d=None: sys.argv[sys.argv.index(k) + 1] if k in sys.argv else d
 K, STRIDE = int(arg("--K", 8)), int(arg("--stride", 8))
@@ -42,6 +43,7 @@ def log(m):
 
 Z = pca_scores(X, K)
 W = np.load(RESULTS / "linear_baseline.npz")["W"]
+match = ConditionMatcher(X)
 os.environ.setdefault("HF_HUB_DISABLE_PROGRESS_BARS", "1")
 from timestral_mps import load_forecaster
 F = load_forecaster()
@@ -59,17 +61,19 @@ for cond in CONDS:
         d = np.load(part); med, Q, done = d["med"], {k: d[k] for k in QS}, int(d["done"])
     else:
         med = np.full(Y.shape, np.nan, np.float32); Q = {k: med.copy() for k in QS}; done = 0
-    pf, t = prompt_frames(cond), time.time()
+    matched = [match(s) for s in st]                                      # condition recognised from brain activity
+    t = time.time()
     for w in range(done, len(st)):
-        m, q = forecast(F, X, Z, neurons, st[w], pf, quantiles=tuple(QS.values()))
+        m, q = forecast(F, X, Z, neurons, st[w], prompt_frames(matched[w]), quantiles=tuple(QS.values()))
         med[w] = m
         for k, v in QS.items():
             Q[k][w] = q[v]
         if True:                                                           # save progress after every window (safe to interrupt)
             np.savez(part, med=med, done=w + 1, **Q)
             log(f"{cond:9s} window {w + 1:3d}/{len(st)} ({(time.time() - t) / (w + 1 - done):.0f} s per window)")
-    np.savez(path, window_index=widx, starts=st, neurons=neurons, truth=Y, linear=lin, med=med, **Q)
+    np.savez(path, window_index=widx, starts=st, neurons=neurons, truth=Y, linear=lin, med=med, prompt_condition=np.array(matched), **Q)
     part.unlink(missing_ok=True)
+    log(f"{cond:9s} prompt from: " + ", ".join(f"{c} x{matched.count(c)}" for c in sorted(set(matched))))
     log(f"{cond:9s} done: ours {np.abs(med - Y).mean():.5f}, linear {np.abs(lin - Y).mean():.5f}, "
         f"80% interval coverage {np.mean((Y >= Q['q10']) & (Y <= Q['q90'])):.3f}")
 log("done")
