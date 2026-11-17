@@ -3,7 +3,7 @@
     uv run python -u scripts/compare.py --run sample1000_seed13_K32
 
 Published models: their released test-set forecasts (download_predictions.py) in data/preds/<name>/seed<k>/;
-every seed found is used and averaged. Recomputed baselines: linear (fit_linear_baseline.py) and the mean of the
+the error of every released seed is computed separately and then averaged (as published; NOT the error of the seeds' averaged forecast, which would be an ensemble). Recomputed baselines: linear (fit_linear_baseline.py) and the mean of the
 last 4 frames. MAE per step, averaged over neurons and windows; "avg 1-32" = mean over steps 1-32 and over the 8
 training conditions; taxis = the held-out condition. Writes results/<run>/compare.json.
 """
@@ -24,13 +24,14 @@ for n in conds:
     Y, widx, neu, st = d["truth"], d["window_index"], d["neurons"], d["starts"]
     P = {"ours": d["med"], "linear": d["linear"],
          "mean of last 4 frames": np.stack([X[s - 4:s, neu].mean(0)[:, None].repeat(H, 1) for s in st])}
-    for m, folder in MODELS.items():
-        seeds = sorted((DATA / "preds" / folder).glob("seed*"))
+    E = {k: np.abs(v - Y) for k, v in P.items()}
+    for m, folder in MODELS.items():                     # published convention: error of EACH seed, then averaged
+        seeds = sorted((DATA / "preds" / folder).glob("seed*"))  # (never average the seeds' forecasts: that is an ensemble)
         if seeds:
-            P[m] = np.mean([np.asarray(zarr.open_array(store=str(sd / ZARR_NAME[n]), mode="r", zarr_format=2)
-                                       .get_orthogonal_selection((widx, slice(None), neu))).transpose(0, 2, 1) for sd in seeds], 0)
-    for k, v in P.items():
-        e = np.abs(v - Y)
+            E[m] = np.mean([np.abs(np.asarray(zarr.open_array(store=str(sd / ZARR_NAME[n]), mode="r", zarr_format=2)
+                                              .get_orthogonal_selection((widx, slice(None), neu))).transpose(0, 2, 1) - Y)
+                            for sd in seeds], 0)
+    for k, e in E.items():
         curves.setdefault(k, {})[n] = e.mean((0, 1)); per_neuron.setdefault(k, {})[n] = e.mean((0, 2))
     cover[n] = {lvl: float(np.mean((Y >= d[lo]) & (Y <= d[hi]))) for lvl, lo, hi in (("50%", "q25", "q75"), ("80%", "q10", "q90"), ("90%", "q05", "q95"))}
 
