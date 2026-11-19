@@ -23,27 +23,28 @@ still exactly the official 256 frames; the prompt never contains validation or t
 held-out condition, are matched to their most similar known condition (flash). Timestral returns quantiles, so every forecast comes with
 prediction intervals.
 
-## Results so far
+## Results
 
-Random sample of 500 neurons, every 8th test window of all 9 conditions, K = 8, compared with the released test-set
-forecasts of the published models on exactly the same neurons and windows (mean absolute error; lower is better;
-"avg 1–32" = mean over the 32 steps and the 8 training conditions):
+1,000 random neurons not used for any choice of the method (`run_sample.py --n 1000 --seed 13 --K 48 --exclude
+sample100,sample400_long`), every 8th test window of all 9 conditions, K = 48 chosen on the validation split,
+label-free prompt. Compared with the released test-set forecasts of the published models on exactly the same neurons and
+windows (mean absolute error; lower is better; "avg 1–32" = mean over the 32 steps and the 8 training conditions;
+published models scored per released seed, then averaged — UNet seeds 1–3, the others seed 4):
 
 | method | step 1 | step 8 | step 32 | avg 1–32 | taxis (held out) |
 |---|---|---|---|---|---|
-| **ours (zero-shot)** | **0.01805** | **0.02268** | **0.02536** | **0.02355** | **0.02689** |
-| UNet (3 seeds) | 0.01858 | 0.02297 | 0.02582 | 0.02393 | 0.02708 |
-| TSMixer | 0.01899 | 0.02309 | 0.02582 | 0.02404 | 0.02710 |
-| Time-Mix | 0.01897 | 0.02298 | 0.02591 | 0.02410 | 0.02714 |
-| TiDE | 0.01898 | 0.02305 | 0.02587 | 0.02413 | 0.05709 |
-| linear | 0.01968 | 0.02436 | 0.02766 | 0.02556 | 0.02847 |
+| **ours (zero-shot)** | **0.01784** | **0.02253** | **0.02524** | **0.02348** | **0.02676** |
+| UNet | 0.01832 | 0.02301 | 0.02576 | 0.02391 | 0.02753 |
+| TSMixer | 0.01866 | 0.02312 | 0.02574 | 0.02402 | 0.02741 |
+| Time-Mix | 0.01866 | 0.02303 | 0.02581 | 0.02405 | 0.02751 |
+| TiDE | 0.01869 | 0.02309 | 0.02572 | 0.02409 | 0.05737 |
+| linear | 0.01935 | 0.02431 | 0.02759 | 0.02551 | 0.02860 |
 
-* **−1.6 % vs the UNet** (95 % interval −2.0 % to −1.2 %, bootstrap over neurons); better on 71 % of neurons.
-* **Calibrated intervals:** the 50 / 80 / 90 % intervals contain the truth 50 / 80 / 91 % of the time, uniformly
-  across conditions, lead times and activity levels.
+* **−1.8 % vs the UNet** (95 % interval −2.2 % to −1.4 %, bootstrap over neurons); better on 68 % of neurons; better
+  than the UNet on all 9 conditions, −2.8 % on the held-out taxis condition.
+* **Calibrated intervals:** the 50 / 80 / 90 % intervals contain the truth 50.1 / 80.8 / 90.9 % of the time
+  (per condition: 49–52 / 80–82 / 90–92 %).
 * Using every 8th window instead of all of them changes scores by < 0.1 % (checked on the UNet forecasts).
-* Choosing K on the validation split favours more components (K = 32–48 about 0.6–0.8 % better than K = 8 on
-  validation). A final run on 1,000 fresh neurons with the validation-chosen K is in progress.
 
 Scoring all 71,721 neurons on all 1,557 test windows would take weeks of laptop GPU time (Apple M5 Pro: about
 50 ms per neuron and window at K = 8), so results are on random neuron samples.
